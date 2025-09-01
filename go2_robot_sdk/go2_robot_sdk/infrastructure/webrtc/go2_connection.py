@@ -12,6 +12,7 @@ Big thanks to @tfoldi (Földi Tamás) and @legion1581 (The RoboVerse Discord Gro
 import asyncio
 import json
 import logging
+import re
 import base64
 from typing import Callable, Optional, Any, Dict, Union
 from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
@@ -105,7 +106,13 @@ class Go2Connection:
             if isinstance(message, str):
                 # Text message - likely JSON
                 try:
-                    msgobj = json.loads(message)
+                    # Replace "inf" with "Infinity" (valid per ECMA-262 extension)
+                    safe_message = re.sub(r'\binf\b', 'Infinity', message)
+
+                    msgobj = json.loads(
+                        safe_message,
+                        parse_constant=lambda x: float('inf') if x == 'Infinity' else float('-inf')
+                    )
                     if msgobj.get("type") == "validation":
                         self.validate_robot_conn(msgobj)
                 except json.JSONDecodeError:
