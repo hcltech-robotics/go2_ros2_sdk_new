@@ -5,101 +5,68 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, GroupAction
-from launch.substitutions import LaunchConfiguration, Command, EnvironmentVariable, PythonExpression
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.substitutions import LaunchConfiguration, Command, EnvironmentVariable
 from launch_ros.parameter_descriptions import ParameterValue
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
-def load_urdf(context, *args, **kwargs):
-    # Get the URDF file name from context
-    urdf_file_name = context.launch_configurations['urdf_file_name']
-
-    # Get package directory
-    pkg_dir = get_package_share_directory('go2_robot_sdk')
-
-    # Create full path to URDF
-    urdf_file_path = os.path.join(pkg_dir, 'urdf', urdf_file_name)
-
-    # Robot state publisher node
-    robot_state_publisher_node = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='webrtc_robot_state_publisher',
-        output='screen',
-        parameters=[{
-            'robot_description': ParameterValue(
-                Command(['cat ', urdf_file_path]),
-                value_type=str
-            )
-        }],
-        on_exit=LaunchConfiguration('on_exit'),
-    )
-
-    return [robot_state_publisher_node]
+class WebRTCLaunchConfig:
+    """Configuration container for WebRTC launch parameters"""
+    def __init__(self):
+        self.robot_ip = os.getenv('ROBOT_IP', os.getenv('GO2_IP', ''))
+        self.urdf_file_name = os.getenv('URDF_FILE_NAME', 'go2.urdf')
+        self.enable_video = os.getenv('ENABLE_VIDEO', 'true')
+        self.send_buffer_limit = os.getenv('SEND_BUFFER_LIMIT', '100000000')
+        self.on_exit = os.getenv('ON_EXIT', 'shutdown')
+        self.elevenlabs_api_key = os.getenv('ELEVENLABS_API_KEY', '')
+        self.voice_name = os.getenv('VOICE_NAME', 'default')
+        self.obstacle_avoidance = os.getenv('OBSTACLE_AVOIDANCE', 'false')
+        self.enable_foxglove_bridge = os.getenv('ENABLE_FOXGLOVE_BRIDGE', 'true')
+        self.pkg_dir = get_package_share_directory('go2_robot_sdk')
+        self.urdf_file_path = os.path.join(self.pkg_dir, 'urdf', self.urdf_file_name)
 
 
-def generate_launch_description():
-    # Declare launch parameters
-    robot_ip = LaunchConfiguration('robot_ip', default=os.getenv(
-        'ROBOT_IP', os.getenv('GO2_IP', '')))
-    enable_video = LaunchConfiguration('enable_video', default='true')
-    urdf_file_name = LaunchConfiguration('urdf_file_name', default='go2.urdf')
-    send_buffer_limit = LaunchConfiguration('send_buffer_limit', default='100000000')
-    on_exit = LaunchConfiguration('on_exit', default='shutdown')
-    elevenlabs_api_key = LaunchConfiguration(
-        'elevenlabs_api_key', default=EnvironmentVariable(
-            'ELEVENLABS_API_KEY', default_value=''))
-    voice_name = LaunchConfiguration('voice_name', default='default')
+class WebRTCNodeFactory:
+    """Factory for creating WebRTC nodes"""
+    def __init__(self, config: WebRTCLaunchConfig):
+        self.config = config
 
-    return LaunchDescription([
-        # Declare launch arguments
-        DeclareLaunchArgument(
-            'robot_ip',
-            default_value=os.getenv('ROBOT_IP', os.getenv('GO2_IP', '')),
-            description='IP address of the robot'
-        ),
-        DeclareLaunchArgument(
-            'enable_video',
-            default_value='true',
-            description='Enable video streaming'
-        ),
-        DeclareLaunchArgument(
-            'urdf_file_name',
-            default_value='go2.urdf',
-            description='Name of the URDF file'
-        ),
-        DeclareLaunchArgument(
-            'on_exit',
-            default_value='shutdown',
-            description='Behavior when a node exits (shutdown will terminate all nodes)'
-        ),
-        DeclareLaunchArgument(
-            'elevenlabs_api_key',
-            default_value=EnvironmentVariable('ELEVENLABS_API_KEY', default_value=''),
-            description='API key for ElevenLabs TTS service'
-        ),
-        DeclareLaunchArgument(
-            'voice_name',
-            default_value='default',
-            description='Voice name for TTS'
-        ),
-        DeclareLaunchArgument(
-            'obstacle_avoidance',
-            default_value='false',
-            description='Enable obstacle avoidance',
-        ),
-        DeclareLaunchArgument(
-            'enable_foxglove_bridge',
-            default_value='true',
-            description='Enable Foxglove Bridge'
-        ),
+    def create_launch_arguments(self):
+        return [
+            DeclareLaunchArgument('robot_ip', default_value=self.config.robot_ip, description='IP address of the robot'),
+            DeclareLaunchArgument('enable_video', default_value=self.config.enable_video, description='Enable video streaming'),
+            DeclareLaunchArgument('urdf_file_name', default_value=self.config.urdf_file_name, description='Name of the URDF file'),
+            DeclareLaunchArgument('send_buffer_limit', default_value=self.config.send_buffer_limit, description='Foxglove Bridge send buffer limit'),
+            DeclareLaunchArgument('on_exit', default_value=self.config.on_exit, description='Behavior when a node exits'),
+            DeclareLaunchArgument('elevenlabs_api_key', default_value=self.config.elevenlabs_api_key, description='API key for ElevenLabs TTS service'),
+            DeclareLaunchArgument('voice_name', default_value=self.config.voice_name, description='Voice name for TTS'),
+            DeclareLaunchArgument('obstacle_avoidance', default_value=self.config.obstacle_avoidance, description='Enable obstacle avoidance'),
+            DeclareLaunchArgument('enable_foxglove_bridge', default_value=self.config.enable_foxglove_bridge, description='Enable Foxglove Bridge'),
+        ]
 
+    def create_robot_state_publisher_node(self):
+        urdf_file_name = LaunchConfiguration('urdf_file_name')
+        urdf_file_path = os.path.join(self.config.pkg_dir, 'urdf', self.config.urdf_file_name)
+        return Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='webrtc_robot_state_publisher',
+            output='screen',
+            parameters=[{
+                'robot_description': ParameterValue(Command(['cat ', urdf_file_path]), value_type=str)
+            }],
+            on_exit=LaunchConfiguration('on_exit'),
+        )
 
-
-        # Group all nodes to ensure they share the same on_exit behavior
-        GroupAction([
-            # Go2 driver node with minimal parameters
+    def create_core_nodes(self):
+        robot_ip = LaunchConfiguration('robot_ip')
+        enable_video = LaunchConfiguration('enable_video')
+        on_exit = LaunchConfiguration('on_exit')
+        send_buffer_limit = LaunchConfiguration('send_buffer_limit')
+        obstacle_avoidance = LaunchConfiguration('obstacle_avoidance')
+        return [
             Node(
                 package='go2_robot_sdk',
                 executable='go2_driver_node',
@@ -110,9 +77,9 @@ def generate_launch_description():
                     'enable_video': enable_video,
                     'decode_lidar': False,
                     'publish_raw_voxel': True,
-                    'obstacle_avoidance': LaunchConfiguration('obstacle_avoidance'),
+                    'obstacle_avoidance': obstacle_avoidance,
                 },
-                    {
+                {
                     "qos_overrides": {
                         "/camera/image_raw": {
                             "publisher": {
@@ -123,48 +90,49 @@ def generate_launch_description():
                         }
                     }
                 }],
-                remappings=[
-                    ('cmd_vel_out', 'cmd_vel'),
-                ],
+                remappings=[('cmd_vel_out', 'cmd_vel')],
                 on_exit=on_exit,
             ),
-
-            # Image compression node
             Node(
                 package='image_transport',
                 executable='republish',
                 name='image_republisher',
                 arguments=['raw', 'compressed'],
-                remappings=[
-                    ('in', 'camera/image_raw'),
-                    ('out/compressed', 'camera/compressed'),
-                ],
+                remappings=[('in', 'camera/image_raw'), ('out/compressed', 'camera/compressed')],
                 on_exit=on_exit,
             ),
-
-            # Foxglove Bridge node
             Node(
                 package='foxglove_bridge',
                 executable='foxglove_bridge',
-                parameters=[{
-                    'send_buffer_limit': send_buffer_limit
-                }],
-                on_exit=on_exit,
+                parameters=[{'send_buffer_limit': send_buffer_limit}],
                 condition=IfCondition(LaunchConfiguration('enable_foxglove_bridge')),
+                on_exit=on_exit,
             ),
-
-            # TTS node
             Node(
-                package='go2_robot_sdk',
+                package='speech_processor',
                 executable='tts_node',
                 name='tts_node',
                 parameters=[{
-                    'elevenlabs_api_key': elevenlabs_api_key,
-                    'voice_name': voice_name
+                    'api_key': LaunchConfiguration('elevenlabs_api_key'),
+                    'provider': 'elevenlabs',
+                    'voice_name': LaunchConfiguration('voice_name'),
+                    'local_playback': False,
+                    'use_cache': True,
+                    'audio_quality': 'standard'
                 }],
-                on_exit=on_exit,
             ),
-        ]),
+        ]
 
-        OpaqueFunction(function=load_urdf),
-    ])
+
+def generate_launch_description():
+    config = WebRTCLaunchConfig()
+    factory = WebRTCNodeFactory(config)
+
+    launch_args = factory.create_launch_arguments()
+    robot_state_publisher_node = factory.create_robot_state_publisher_node()
+    core_nodes = factory.create_core_nodes()
+
+    launch_entities = launch_args + [robot_state_publisher_node] + core_nodes
+
+    return LaunchDescription(launch_entities)
+
