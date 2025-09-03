@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import os
+from typing import List
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
@@ -25,7 +26,19 @@ class WebRTCLaunchConfig:
         self.obstacle_avoidance = os.getenv('OBSTACLE_AVOIDANCE', 'false')
         self.enable_foxglove_bridge = os.getenv('ENABLE_FOXGLOVE_BRIDGE', 'true')
         self.pkg_dir = get_package_share_directory('go2_robot_sdk')
-        self.urdf_file_path = os.path.join(self.pkg_dir, 'urdf', self.urdf_file_name)
+
+        self.package_dir = get_package_share_directory('go2_robot_sdk')
+        self.config_paths = self._get_config_paths()
+
+
+    def _get_config_paths(self):
+        """Get all configuration file paths"""
+        return {
+            'slam': os.path.join(self.package_dir, 'config', 'mapper_params_online_async.yaml'),
+            'nav2': os.path.join(self.package_dir, 'config', 'nav2_params.yaml'),
+            'urdf': os.path.join(self.package_dir, 'urdf', self.urdf_file_name),
+        }
+
 
 
 class WebRTCNodeFactory:
@@ -47,15 +60,13 @@ class WebRTCNodeFactory:
         ]
 
     def create_robot_state_publisher_node(self):
-        urdf_file_name = LaunchConfiguration('urdf_file_name')
-        urdf_file_path = os.path.join(self.config.pkg_dir, 'urdf', self.config.urdf_file_name)
         return Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
             name='webrtc_robot_state_publisher',
             output='screen',
             parameters=[{
-                'robot_description': ParameterValue(Command(['cat ', urdf_file_path]), value_type=str)
+                'robot_description': ParameterValue(Command(['cat ', self.config.config_paths['urdf']]), value_type=str)
             }],
             on_exit=LaunchConfiguration('on_exit'),
         )
@@ -123,6 +134,45 @@ class WebRTCNodeFactory:
             ),
         ]
 
+    def create_navigation_nodes(self) -> List[IncludeLaunchDescription]:
+        """Create included launch descriptions"""
+        use_sim_time = LaunchConfiguration('use_sim_time', default='false')
+        with_foxglove = LaunchConfiguration('foxglove', default='true')
+        with_slam = LaunchConfiguration('slam', default='true')
+        with_nav2 = LaunchConfiguration('nav2', default='true')
+        
+        foxglove_launch = os.path.join(
+            get_package_share_directory('foxglove_bridge'),
+            'launch', 'foxglove_bridge_launch.xml'
+        )
+        
+        return [
+            # SLAM Toolbox
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([
+                    os.path.join(get_package_share_directory('slam_toolbox'),
+                                'launch', 'online_async_launch.py')
+                ]),
+                condition=IfCondition(with_slam),
+                launch_arguments={
+                    'slam_params_file': self.config.config_paths['slam'],
+                    'use_sim_time': use_sim_time,
+                }.items(),
+            ),
+            # Nav2
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([
+                    os.path.join(get_package_share_directory('nav2_bringup'),
+                                'launch', 'navigation_launch.py')
+                ]),
+                condition=IfCondition(with_nav2),
+                launch_arguments={
+                    'params_file': self.config.config_paths['nav2'],
+                    'use_sim_time': use_sim_time,
+                }.items(),
+            ),
+        ]
+
 
 def generate_launch_description():
     config = WebRTCLaunchConfig()
@@ -131,8 +181,9 @@ def generate_launch_description():
     launch_args = factory.create_launch_arguments()
     robot_state_publisher_node = factory.create_robot_state_publisher_node()
     core_nodes = factory.create_core_nodes()
+    navigation_nodes = factory.create_navigation_nodes()
 
-    launch_entities = launch_args + [robot_state_publisher_node] + core_nodes
+    launch_entities = launch_args + [robot_state_publisher_node] + core_nodes + navigation_nodes
 
     return LaunchDescription(launch_entities)
 
