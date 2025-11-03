@@ -35,7 +35,7 @@ class WebRTCLaunchConfig:
         """Get all configuration file paths"""
         return {
             'slam': os.path.join(self.package_dir, 'config', 'mapper_params_online_async.yaml'),
-            'nav2': os.path.join(self.package_dir, 'config', 'nav2_params.yaml'),
+            'nav2': os.path.join(self.package_dir, 'config', 'nav2_wo_lidar.yaml'),
             'urdf': os.path.join(self.package_dir, 'urdf', self.urdf_file_name),
         }
 
@@ -43,6 +43,7 @@ class WebRTCLaunchConfig:
 
 class WebRTCNodeFactory:
     """Factory for creating WebRTC nodes"""
+
     def __init__(self, config: WebRTCLaunchConfig):
         self.config = config
 
@@ -186,4 +187,3 @@ def generate_launch_description():
     launch_entities = launch_args + [robot_state_publisher_node] + core_nodes + navigation_nodes
 
     return LaunchDescription(launch_entities)
-
