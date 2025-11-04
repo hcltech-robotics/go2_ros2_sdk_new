@@ -16,6 +16,7 @@ import re
 import base64
 from typing import Callable, Optional, Any, Dict, Union
 from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .crypto.encryption import CryptoUtils, ValidationCrypto, PathCalculator, EncryptionError
 from .http_client import HttpClient, WebRTCHttpError
