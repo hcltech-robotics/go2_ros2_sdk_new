@@ -26,6 +26,9 @@ class WebRTCLaunchConfig:
         self.obstacle_avoidance = os.getenv('OBSTACLE_AVOIDANCE', 'false')
         self.enable_foxglove_bridge = os.getenv('ENABLE_FOXGLOVE_BRIDGE', 'true')
         self.pkg_dir = get_package_share_directory('go2_robot_sdk')
+        self.robot_ip_list = os.getenv('ROBOT_IP_LIST', '').split(',')
+        self.map_name = os.getenv('MAP_NAME', 'go2_map')
+        self.save_map = os.getenv('SAVE_MAP', 'false').lower() == 'true'
 
         self.package_dir = get_package_share_directory('go2_robot_sdk')
         self.config_paths = self._get_config_paths()
@@ -70,6 +73,23 @@ class WebRTCNodeFactory:
                 'robot_description': ParameterValue(Command(['cat ', self.config.config_paths['urdf']]), value_type=str)
             }],
             on_exit=LaunchConfiguration('on_exit'),
+        )
+
+    def create_pointcloud_to_laserscan_node(self, namespace: str = None) -> Node:
+        """Create pointcloud to laserscan conversion node"""
+        return Node(
+            package='pointcloud_to_laserscan',
+            executable='pointcloud_to_laserscan_node',
+            name='go2_pointcloud_to_laserscan',
+            remappings=[
+                ('cloud_in', 'point_cloud2'),
+                ('scan', 'scan'),
+            ],
+            parameters=[{
+                'target_frame': 'base_link',
+                'max_height': 0.5
+            }],
+            output='screen',
         )
 
     def create_core_nodes(self):
@@ -183,7 +203,8 @@ def generate_launch_description():
     robot_state_publisher_node = factory.create_robot_state_publisher_node()
     core_nodes = factory.create_core_nodes()
     navigation_nodes = factory.create_navigation_nodes()
+    pointcloud_to_laserscan_node = factory.create_pointcloud_to_laserscan_node()
 
-    launch_entities = launch_args + [robot_state_publisher_node] + core_nodes + navigation_nodes
+    launch_entities = launch_args + [robot_state_publisher_node] + core_nodes + navigation_nodes + [pointcloud_to_laserscan_node]
 
     return LaunchDescription(launch_entities)

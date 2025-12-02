@@ -74,6 +74,8 @@ class Go2DriverNode(Node):
         # State
         self.joy_state = Joy()
 
+        self.under_control = False
+
     def _setup_configuration(self) -> RobotConfig:
         """Configuration setup"""
         robot_ip = os.getenv('ROBOT_IP', os.getenv('GO2_IP', ''))
@@ -260,10 +262,22 @@ class Go2DriverNode(Node):
 
     def _on_cmd_vel(self, msg: Twist, robot_id: str) -> None:
         """Callback for movement commands"""
+        if not self.under_control:
+            self.get_logger().info(f"Taking control of robot {robot_id} for movement")
+            self.robot_control_service.set_obstacle_avoidance(
+                self.config.obstacle_avoidance, robot_id)
+            self.under_control = True
+
         self.robot_control_service.handle_cmd_vel(
             msg.linear.x, msg.linear.y, msg.angular.z, 
             robot_id, self.config.obstacle_avoidance
         )
+
+        if msg.linear.x == 0.0 and msg.linear.y == 0.0 and msg.angular.z == 0.0:
+            self.under_control = False
+            self.robot_control_service.set_obstacle_avoidance(
+                False, robot_id)
+            self.get_logger().info(f"Releasing control of robot {robot_id} for movement")
 
     def _on_webrtc_req(self, msg: WebRtcReq, robot_id: str) -> None:
         """Callback for WebRTC requests"""

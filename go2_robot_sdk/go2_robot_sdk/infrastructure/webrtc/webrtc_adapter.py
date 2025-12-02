@@ -96,7 +96,7 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
                     else:
                         # Fallback to synchronous send
                         connection.data_channel.send(command)
-                    logger.debug(f"Command sent to robot {robot_id}: {command[:50]}")
+                    logger.debug(f"Command sent to robot {robot_id}: {command}")
                 else:
                     logger.warning(f"No data channel available for robot {robot_id}")
             except Exception as e:
@@ -128,6 +128,7 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
                 round(z, 2), 
                 self.config.obstacle_avoidance
             )
+            logger.debug(f"Generated movement command for robot {robot_id}: {command}")
             self.send_command(robot_id, command)
         except Exception as e:
             logger.error(f"Error sending movement command: {e}")
