@@ -64,4 +64,17 @@ class RobotControlService:
             )
             logger.info(f"Obstacle avoidance set to {enabled} for robot {robot_id}")
         except Exception as e:
-            logger.error(f"Error setting obstacle avoidance: {e}") 
+            logger.error(f"Error setting obstacle avoidance: {e}")
+
+    def set_brightness(self, brightness: int, robot_id: str) -> None:
+        """Set robot brightness"""
+        try:
+            self.controller.send_webrtc_request(
+                robot_id,
+                1005,
+                {"brightness": brightness},
+                RTC_TOPIC['VUI']
+            )
+            logger.info(f"Brightness set to {brightness} for robot {robot_id}")
+        except Exception as e:
+            logger.error(f"Error setting brightness: {e}") 

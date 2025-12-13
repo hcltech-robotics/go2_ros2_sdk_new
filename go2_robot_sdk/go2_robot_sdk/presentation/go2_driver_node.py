@@ -18,6 +18,7 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import Twist, PoseStamped
 from go2_interfaces.msg import Go2State, IMU
 from go2_interfaces.msg import LowState, VoxelMapCompressed, WebRtcReq
+from go2_interfaces.srv import SetBrightness
 from sensor_msgs.msg import PointCloud2, JointState, Joy, Image, CameraInfo
 from nav_msgs.msg import Odometry
 
@@ -208,6 +209,11 @@ class Go2DriverNode(Node):
             self.create_subscription(
                 WebRtcReq, 'webrtc_req',
                 lambda msg: self._on_webrtc_req(msg, "0"), qos_profile)
+            self.create_service(
+                SetBrightness, 
+                'set_brightness',
+                lambda req, res: self._on_set_brightness(req, res, "0")
+            )
         else:
             for i in range(num_robots):
                 self.create_subscription(
@@ -216,6 +222,11 @@ class Go2DriverNode(Node):
                 self.create_subscription(
                     WebRtcReq, f'robot{i}/webrtc_req',
                     lambda msg, robot_id=str(i): self._on_webrtc_req(msg, robot_id), qos_profile)
+                self.create_service(
+                    SetBrightness, 
+                    f'robot{i}/set_brightness',
+                    lambda req, res, robot_id=str(i): self._on_set_brightness(req, res, robot_id)
+                )
 
         # Joystick subscriber
         self.create_subscription(Joy, 'joy', self._on_joy, qos_profile)
@@ -284,6 +295,18 @@ class Go2DriverNode(Node):
         self.robot_control_service.handle_webrtc_request(
             msg.api_id, msg.parameter, msg.topic, msg.id, robot_id
         )
+
+    def _on_set_brightness(self, req, res, robot_id: str):
+        """Callback for setting brightness"""
+        try:
+            self.robot_control_service.set_brightness(req.brightness, robot_id)
+            res.success = True
+            res.message = "Brightness set successfully"
+        except Exception as e:
+            self.get_logger().error(f"Failed to set brightness for robot {robot_id}: {e}")
+            res.success = False
+            res.message = str(e)
+        return res
 
     def _on_joy(self, msg: Joy) -> None:
         """Callback for joystick"""
